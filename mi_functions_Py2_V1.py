@@ -51,7 +51,7 @@ def molecat(major, columns):
     #dictionary of mole_masses
     mm = {'SIO2': 60.08, 'TIO2': 79.866, 'AL2O3': 101.96, 'FE2O3': 159.69, 'FEO': 71.844, 'MNO': 70.9374, 'MGO': 40.3044, 'CAO': 56.0774, 'NA2O': 61.9789, 'K2O': 94.2, 'P2O5': 283.89, 'H2O': 18.01528} #No volatiles except H2O
     #dictionary of mole_masses for single cation
-    mm_sc = {'SIO2': 60.08, 'TIO2': 79.866, 'AL2O3': 50.98, 'FE2O3': 79.845, 'FEO': 71.844, 'MNO': 70.9374, 'MGO': 40.3044, 'CAO': 56.0774, 'NA2O': 30.9893, 'K2O': 47.0978, 'P2O5': 70.97126, 'H2O': 9.0075} #No volatiles except H2O
+    mm_sc = {'SIO2': 60.08, 'TIO2': 79.866, 'AL2O3': 50.98, 'FE2O3': 79.845, 'FEO': 71.844, 'MNO': 70.9374, 'MGO': 40.3044, 'CAO': 56.0774, 'NA2O': 30.9893, 'K2O': 47.0978, 'P2O5': 141.94, 'H2O': 9.0075} #No volatiles except H2O
 
     mole_pro = []
     cat_pro = []
@@ -286,10 +286,6 @@ def toplis(temperature, pressure, fo, mole_frac, columns, H2O):
     #fo in mole percent
     #H2O is in weight percent
 
-    H2Omf = mole_frac[columns.index('H2O')]
-        #Make mole fractions on anhydrous basis
-    mole_frac = [x*(1/(1-H2Omf)) for x in mole_frac]
-
     pressure = pressure * 10.0
 
     fo = fo/100.0
@@ -518,20 +514,9 @@ def VolatileCalc(func,var1,var2):
         #[variable, pressure interval (in MPa), temperature (in C)]
         #variable is a string that must be 'h2o' or 'co2' (to indicate the volatile of interest)
         #Elements of the list must be float or integer
-    ###########################################################################
-
 
     ###########################################################################
-    # Local variable explanation
-    ###########################################################################
-
-
-
-    ###########################################################################
-
-
-    ###########################################################################
-    # Internal function explanations - could be made external to speed up VolatileCalc function
+    # Internal functions
     ###########################################################################
 
     def FNA(TK):
@@ -1373,16 +1358,14 @@ def pp_co2(mol, tot_p):
     return mol*tot_p
 def RK(x,Rrk,Trk,ark,brk,Prk):
     return (((Rrk*Trk)/(x-brk)-ark/(np.sqrt(Trk)*x*(x+brk)))/(10.0**6.0))-Prk
-def mv_rk(T1,P1):
+def mv_rk(T1,P1,Tcr,Pcr):
     # T is temperature in C
     # P is pressure in MPa
     T1 += 273.15
-    CO2_Tc = 304.1282 #Duan and Zhang (2006)
-    CO2_Pc = 73.773 #Duan and Zhang (2006)
     R = 8.314462
-    a = (0.4275*R**2.0*CO2_Tc**(5.0/2.0))/(CO2_Pc*100000.0)
-    b = 0.08664*R*CO2_Tc/(CO2_Pc*100000.0)
-    Vm = optimize.fsolve(RK, 1E-5,args=(R,T1,a,b,P1))
+    a = (0.4275*R**2.0*Tcr**(5.0/2.0))/(Pcr*100000.0)
+    b = 0.08664*R*Tcr/(Pcr*100000.0)
+    Vm = optimize.fsolve(RK, 5E-5,args=(R,T1,a,b,P1))
     return Vm
 
 def CO2add(VBvol,H2O,CO2,maj,columns,Tglass,Pglass,mfCO2,mvCO2,Ti,SiO2i,PEC):
@@ -1395,7 +1378,7 @@ def CO2add(VBvol,H2O,CO2,maj,columns,Tglass,Pglass,mfCO2,mvCO2,Ti,SiO2i,PEC):
     T = Tglass
 
     #From Lesher & Spera
-    par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*(P-1)/1000), 'AL2O3': (37.76-2.26*(P-1)/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*(P-1)/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*(P-1)/1000),'MGO': (11.69+3.27*(T+273-1673)/1000-0.27*(P-1)/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000-0.34*(P-1)/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*(P-1)/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*(P-1)/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*(P-1)/1000)}
+    par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*P/1000), 'AL2O3': (37.76-2.26*P/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*P/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*P/1000),'MGO': (11.69+3.27*(T+273-1673)/1000-0.27*P/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000-0.34*P/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*P/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*P/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*P/1000)}
     density, volume = SLD(columns, mole_pro, par_molar_vol, mole_mass)
 
     #CO2 mass balance

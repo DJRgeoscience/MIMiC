@@ -23,7 +23,7 @@ rasmussend@si.edu
 
 
 #Input files
-melt_inclusion_file = 'input\\ExampleInputData.csv'
+melt_inclusion_file = 'input\\ExampleInput.csv'
 output_file = 'output\\ExampleOutput.csv'
 
 #Vapor bubble correction
@@ -76,7 +76,6 @@ density_profile = mi.define_profile(40,4000)
 #Molar masses
 mole_mass = {'SIO2': 60.08, 'TIO2': 79.866, 'AL2O3': 101.96, 'FE2O3': 159.69, 'FEO': 71.844, 'MNO': 70.9374, 'MGO': 40.3044, 'CAO': 56.0774, 'NA2O': 61.9789, 'K2O': 94.2, 'P2O5': 283.89, 'H2O': 18.01528}
 CO2_mm = 44.01
-mole_mass_sc = {'SIO2': 60.08, 'TIO2': 79.866, 'AL2O3': 50.98, 'FE2O3': 71.844, 'FEO': 71.844, 'MNO': 70.9374, 'MGO': 40.3044, 'CAO': 56.0774, 'NA2O': 30.9893, 'K2O': 47.0978, 'P2O5': 70.97126, 'H2O': 9.0075}
 maj_headers = ['SIO2', 'TIO2', 'AL2O3', 'FE2O3', 'FEO', 'MNO', 'MGO', 'CAO', 'NA2O', 'K2O', 'P2O5', 'H2O']
 minor_headers = ['S','CL','CO2']
 
@@ -96,7 +95,7 @@ outputs = []
 ###############################################################################
 
 flag = 0
-with open (melt_inclusion_file, 'rb') as f:
+with open (melt_inclusion_file, 'r') as f:
     reader = csv.reader(f)
     for row in reader:
         if flag == 0:
@@ -315,10 +314,12 @@ for sample in range(len(d)):
                 t = d[sample][mi_headers.index('CR')] #Cooling rate
         else:
             if d[sample][mi_headers.index('DMI')] > 0: #if cooling rate is not entered, calculate cooling rate based on aMgO (calculated from Teqolv), if no solution is found then a value of 10 K/s is assumed
-                t = optimize.fsolve(mi.dodson_t, 10.,args=(EaMgO,A,DoMgO,TMGO+273.15,d[sample][mi_headers.index('DMI')]/2E6))
+                t = optimize.fsolve(mi.dodson_t, 1.,args=(EaMgO,A,DoMgO,TMGO+273.15,d[sample][mi_headers.index('DMI')]/2E6))
                 t = float(t) #This is the modeled cooling rate
                 if t <= 0.001: #This is the minimum cooling rate
                     t = 0.001
+                elif abs(t-1) < 0.000001: #If the solver does not find a root to the Dodson equation, it will return the initial guess (1 K/s). However, we would rather assume a value of 10 K/s.
+                    t = 10.
             else: #if cooling rate and melt inclusion diameter are not entered, assume a value of 10 K/S (representative of ash)
                 t = 10.
 
@@ -424,9 +425,6 @@ for sample in range(len(d)):
             else: #If post-entrapment melting has occcurred, subtract olivine
                 Y = -1.
 
-            #Normalize melt composition
-            temp = mi.norm(pec_temp, maj_total)
-
             #Olivine addition/subtraction loop
             while Y * olv_fo_temp < Y * meas_olv_fo and wt_olv_add < 100:
                 #Olivine step
@@ -466,9 +464,6 @@ for sample in range(len(d)):
 
                 olv_fo_temp = mi.focalc(pec_temp, maj_headers, Kd_temp)
                 eq_olv_calc = mi.eqolv(olv_fo_temp)
-
-                #Normalize melt composition
-                temp = mi.norm(pec_temp, maj_total)
 
                 if Y * olv_fo_temp >= Y * meas_olv_fo:
                     wt_olv_add_total = Y * wt_olv_add
@@ -626,7 +621,7 @@ for sample in range(len(d)):
                     int_CO2mol_Tg = 0
 
                 #Molar volume of CO2
-                CO2_mv = float( mi.mv_rk( Tg, int_P_Tg ) )
+                CO2_mv = float( mi.mv_rk( Tg, int_P_Tg, 304.1282, 73.773) ) # Tc and Pc for CO2 from Duan and Zhang (2006)
 
                 #Vapor bubble correction
                 if d[sample][mi_headers.index('VBVOLP')] > 0:
@@ -675,7 +670,7 @@ for sample in range(len(d)):
                 # Riker (2005) calculated volume bubble correction
                 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-                CO2_mv = float( mi.mv_rk( TMGO, int_P ) )
+                CO2_mv = float( mi.mv_rk( TMGO, int_P, 304.1282, 73.773) ) # Tc and Pc for CO2 from Duan and Zhang (2006)
 
                 if initial_T > TMGO and type(FeOTi) == int: #Only perform Riker correction if MI cooled from the initial to the intermediate state and no Fe-Mg correction was applied
 
@@ -734,7 +729,7 @@ for sample in range(len(d)):
                     int_CO2mol_TCO2 /= 100.
                 else:
                     int_CO2mol_TCO2 = 0
-                CO2_mv = float( mi.mv_rk( TCO2, int_P_TCO2 ) )
+                CO2_mv = float( mi.mv_rk( TCO2, int_P_TCO2, 304.1282, 73.773) ) # Tc and Pc for CO2 from Duan and Zhang (2006)
 
                 mm = {'SIO2': 60.08, 'TIO2': 79.866, 'AL2O3': 101.96, 'FE2O3': 159.69, 'FEO': 71.844, 'MNO': 70.9374, 'MGO': 40.3044, 'CAO': 56.0774, 'NA2O': 61.9789, 'K2O': 94.2, 'P2O5': 283.89, 'H2O': 18.01528, 'CO2': 44.01}
 
@@ -743,7 +738,7 @@ for sample in range(len(d)):
                 #------------------------------------------------------------------
                 T = initial_T
                 P = int_P_TCO2 #Prior to entering the iterative part of the bubble calculation, only composition and temperature are different between initial and intermediate states
-                par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*P/1000), 'AL2O3': (37.42-2.26*P/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*P/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*P/1000),'MGO': (11.69+3.27*(T+273-1673)/1000+0.27*P/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000+0.34*(P-1)/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*P/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*P/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*P/1000), 'CO2': (25.4+10.86*(T+273-1673)/1000-3.82*P/1000)}
+                par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*P/1000), 'AL2O3': (37.42-2.26*P/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*P/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*P/1000),'MGO': (11.69+3.27*(T+273-1673)/1000+0.27*P/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000+0.34*P/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*P/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*P/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*P/1000), 'CO2': (25.4+10.86*(T+273-1673)/1000-3.82*P/1000)}
 
                 temp_i = [ x for x in pec_maj ]
                 temp_headers = [ x for x in maj_headers ]
@@ -770,7 +765,7 @@ for sample in range(len(d)):
                 #------------------------------------------------------------------
                 T = TCO2
                 P = int_P_TCO2
-                par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*P/1000), 'AL2O3': (37.42-2.26*P/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*P/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*P/1000),'MGO': (11.69+3.27*(T+273-1673)/1000+0.27*P/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000+0.34*(P-1)/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*P/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*P/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*P/1000), 'CO2': (25.4+10.86*(T+273-1673)/1000-3.82*P/1000)}
+                par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*P/1000), 'AL2O3': (37.42-2.26*P/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*P/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*P/1000),'MGO': (11.69+3.27*(T+273-1673)/1000+0.27*P/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000+0.34*P/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*P/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*P/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*P/1000), 'CO2': (25.4+10.86*(T+273-1673)/1000-3.82*P/1000)}
 
                 temp_int = [ x for x in maj_int ]
                 temp_int.append(int_CO2/10000.)
@@ -853,7 +848,7 @@ for sample in range(len(d)):
 
                         #Calculate initial volume
                         temp_i[temp_headers.index('CO2')] = CO2_vbg/10000.
-                        par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*P/1000), 'AL2O3': (37.42-2.26*P/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*P/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*P/1000),'MGO': (11.69+3.27*(T+273-1673)/1000+0.27*P/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000+0.34*(P-1)/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*P/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*P/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*P/1000), 'CO2': (25.4+10.86*(T+273-1673)/1000-3.82*P/1000)}
+                        par_molar_vol = {'SIO2': (26.86-1.89*P/1000), 'TIO2': (23.16+7.24*(T+273-1673)/1000-2.31*P/1000), 'AL2O3': (37.42-2.26*P/1000), 'FE2O3': (42.13+9.09*(T+273-1673)/1000-2.53*P/1000), 'FEO': (13.65+2.92*(T+273-1673)/1000-0.45*P/1000),'MGO': (11.69+3.27*(T+273-1673)/1000+0.27*P/1000), 'CAO': (16.53+3.74*(T+273-1673)/1000+0.34*P/1000), 'NA2O': (28.88+7.68*(T+273-1673)/1000-2.4*P/1000), 'K2O': (45.07+12.08*(T+273-1673)/1000-6.75*P/1000), 'H2O': (26.27+9.46*(T+273-1673)/1000-3.15*P/1000), 'CO2': (25.4+10.86*(T+273-1673)/1000-3.82*P/1000)}
                         moles_i = []
                         for ii in range(len(temp_i)):
                             moles_i.append(temp_i[ii]/mm[temp_headers[ii]])
@@ -1072,6 +1067,6 @@ for i in range(len(outputs)):
     output.append([mi_samples[i]]+ele+[sum_mi]+temp1+['']+outputs[i][-1]+['']+ele_error+temp2+['']+norm+['']+mi.norm(ele[:-4], 100.)+['']+mi.norm(Fetemp1, 100.))
 
 # Write to CSV
-with open(output_file, 'wb') as f:
+with open(output_file, 'w') as f:
     writer = csv.writer(f)
     writer.writerows(output)
